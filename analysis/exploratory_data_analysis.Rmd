@@ -1,0 +1,115 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+# Scottish Household Survey EDA
+
+Read in the data 
+
+```{r}
+library(tidyverse)
+library(janitor)
+```
+
+```{r}
+community_belonging <- read_csv("raw_data/community_belonging.csv") %>% 
+  clean_names()
+
+green_spaces <- read_csv("raw_data/green_spaces.csv") %>% 
+  clean_names()
+
+neighbourhood_rating <- read_csv("raw_data/neighbourhood_rating.csv") %>% 
+  clean_names()
+```
+### Community Belonging data
+
+```{r}
+glimpse(community_belonging)
+skimr::skim(community_belonging)
+```
+> No missing values
+> 11 character vectors and 2 numerical (`date_code` aka year, `value` aka percentage)
+> columns of particular interest for business question: 
+  1. `community_belonging` (answers to the question "how strongly do you feel you belong to your immediate neighbourhood?")
+  2. `walking_distance_to_nearest_greenspace` (could change to a numeric with units in minutes)
+> are both `measurement` and `units` columns needed?
+> what does `feature_code` relate to? Local authority? Something else?
+> personal attributes: `gender`, `ethnicity`, `simd_quintiles`
+> household attributes: `household_type`, `type_of_tenure`, `urban_rural_classification`
+> includes aggregated data ("All")
+
+```{r}
+community_belonging %>% 
+  count(feature_code)
+
+community_belonging %>% 
+  count(gender)
+
+community_belonging %>% 
+  count(ethnicity)
+
+community_belonging %>% 
+  count(walking_distance_to_nearest_greenspace)
+
+community_belonging %>% 
+  count(household_type)
+
+community_belonging %>% 
+  count(type_of_tenure)
+
+community_belonging %>% 
+  count(community_belonging)
+```
+
+### Greenspace data
+
+```{r}
+glimpse(green_spaces)
+skimr::skim(green_spaces)
+```
+
+> same format as community_belonging data (partial match?)
+> added `age` column (grouped)
+> `distance__to_nearest_green_or_blue_space` is now measured in percentage
+
+```{r}
+green_spaces %>% 
+  count(distance_to_nearest_green_or_blue_space)
+```
+
+
+### Neighbourhood rating
+
+```{r}
+glimpse(neighbourhood_rating)
+skimr::skim(neighbourhood_rating)
+```
+
+> again, same format
+> added `neighbourhood_rating` column 
+
+```{r}
+# Trying to figure out what the measurement column pertains to
+neighbourhood_rating %>% 
+  filter(feature_code == "S12000005" &
+         date_code == 2013 &
+         gender == "All" &
+         urban_rural_classification == "All" &
+         simd_quintiles == "All" &
+         type_of_tenure == "All" &
+         household_type == "All" &
+         ethnicity == "All" &
+         walking_distance_to_nearest_greenspace == "All") %>% 
+  group_by(measurement, neighbourhood_rating) %>% 
+  mutate(total_value = sum(value)) %>% 
+  select(value, total_value)
+```
+
+```{r}
+neighbourhood_rating %>% 
+  count(walking_distance_to_nearest_greenspace)
+
+neighbourhood_rating %>% 
+  count(neighbourhood_rating)
+```
+
