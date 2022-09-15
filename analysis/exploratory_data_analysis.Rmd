@@ -1,6 +1,8 @@
 ---
 title: "R Notebook"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 # Scottish Household Survey EDA
 
@@ -9,16 +11,32 @@ Read in the data
 ```{r}
 library(tidyverse)
 library(janitor)
+library(here)
+library(GGally)
+library(readxl)
 ```
 
 ```{r}
-community_belonging <- read_csv("raw_data/community_belonging.csv") %>% 
+
+community_belonging <- read_csv(here::here("raw_data/community_belonging.csv")) %>% 
   clean_names()
 
-green_spaces <- read_csv("raw_data/green_spaces.csv") %>% 
+green_spaces <- read_csv(here::here("raw_data/green_spaces.csv")) %>% 
   clean_names()
 
-neighbourhood_rating <- read_csv("raw_data/neighbourhood_rating.csv") %>% 
+neighbourhood_rating <- read_csv(here::here("raw_data/neighbourhood_rating.csv")) %>% 
+  clean_names()
+
+area_improvement <- read_csv(here::here("raw_data/area_improvement.csv")) %>% 
+  clean_names()
+
+neighbourhood_involvement <- read_csv(here::here("raw_data/neighbourhood_involvement.csv")) %>% 
+  clean_names()
+
+shs_responses <- read_csv(here::here("raw_data/shs_aggregate_responses.csv")) %>% 
+  clean_names()
+
+national_performance_framework <- read_xlsx(here::here("raw_data/npf_database.xlsx")) %>% 
   clean_names()
 ```
 ### Community Belonging data
@@ -27,16 +45,16 @@ neighbourhood_rating <- read_csv("raw_data/neighbourhood_rating.csv") %>%
 glimpse(community_belonging)
 skimr::skim(community_belonging)
 ```
-> No missing values
-> 11 character vectors and 2 numerical (`date_code` aka year, `value` aka percentage)
-> columns of particular interest for business question: 
+- No missing values
+- 11 character vectors and 2 numerical (`date_code` aka year, `value` aka percentage)
+- columns of particular interest for business question: 
   1. `community_belonging` (answers to the question "how strongly do you feel you belong to your immediate neighbourhood?")
   2. `walking_distance_to_nearest_greenspace` (could change to a numeric with units in minutes)
-> are both `measurement` and `units` columns needed?
-> what does `feature_code` relate to? Local authority? Something else?
-> personal attributes: `gender`, `ethnicity`, `simd_quintiles`
-> household attributes: `household_type`, `type_of_tenure`, `urban_rural_classification`
-> includes aggregated data ("All")
+- are both `measurement` and `units` columns needed?
+- what does `feature_code` relate to? Local authority? Something else?
+- personal attributes: `gender`, `ethnicity`, `simd_quintiles`
+- household attributes: `household_type`, `type_of_tenure`, `urban_rural_classification`
+- includes aggregated data ("All")
 
 ```{r}
 community_belonging %>% 
@@ -57,9 +75,19 @@ community_belonging %>%
 community_belonging %>% 
   count(type_of_tenure)
 
+```
+
+
+```{r}
 community_belonging %>% 
   count(community_belonging)
+
+community_belonging %>% 
+  ggplot() +
+  geom_histogram(aes(value)) +
+  facet_wrap(~ community_belonging)
 ```
+
 
 ### Greenspace data
 
@@ -68,13 +96,21 @@ glimpse(green_spaces)
 skimr::skim(green_spaces)
 ```
 
-> same format as community_belonging data (partial match?)
-> added `age` column (grouped)
-> `distance__to_nearest_green_or_blue_space` is now measured in percentage
+- same format as community_belonging data (partial match?)
+- added `age` column (grouped)
+- `distance__to_nearest_green_or_blue_space` is now measured in percentage
 
 ```{r}
 green_spaces %>% 
   count(distance_to_nearest_green_or_blue_space)
+
+green_spaces %>% 
+  ggplot() +
+  geom_histogram(aes(value)) +
+  facet_wrap(~ distance_to_nearest_green_or_blue_space)
+
+green_spaces %>% 
+  filter(value == 0)
 ```
 
 
@@ -85,8 +121,8 @@ glimpse(neighbourhood_rating)
 skimr::skim(neighbourhood_rating)
 ```
 
-> again, same format
-> added `neighbourhood_rating` column 
+- again, same format
+- added `neighbourhood_rating` column 
 
 ```{r}
 # Trying to figure out what the measurement column pertains to
@@ -111,5 +147,188 @@ neighbourhood_rating %>%
 
 neighbourhood_rating %>% 
   count(neighbourhood_rating)
+
+neighbourhood_rating %>% 
+  ggplot() +
+  geom_histogram(aes(value)) +
+  facet_wrap(~ neighbourhood_rating)
+
+neighbourhood_rating %>% 
+  filter(value == 0)
 ```
 
+### Area Improvement
+
+```{r}
+glimpse(area_improvement) 
+skimr::skim(area_improvement)
+```
+- has additional `feature_name` and `feature_type` columns
+- answers question whether selected adult thinks their area has improved
+
+```{r}
+area_improvement %>% 
+  count(local_neighbourhood_improvement) # what do differences in response nos mean? surely they should be recorded for all?
+```
+
+
+```{r}
+area_improvement %>% 
+  count(feature_type)
+
+area_improvement %>% 
+  count(feature_name)
+```
+
+```{r}
+area_improvement %>% 
+  ggplot() +
+  geom_histogram(aes(value)) +
+  facet_wrap(~ local_neighbourhood_improvement)
+```
+```{r}
+area_improvement %>% 
+ filter(value == 0 & measurement == "Percent")
+```
+
+
+
+### Neighbourhood Involvement
+
+```{r}
+glimpse(neighbourhood_involvement)
+skimr::skim(neighbourhood_involvement)
+```
+
+- answers question to do with involvement with people in neighbourhood (how does this interact with neighbourhood_rating or community_belonging?)
+
+```{r}
+neighbourhood_involvement %>% 
+  count(involvement_with_people_in_the_neighbourhood)
+```
+
+- there's no negative framing of this question 
+
+```{r}
+neighbourhood_involvement %>% 
+  ggplot() +
+  geom_histogram(aes(value)) +
+  facet_wrap(~ involvement_with_people_in_the_neighbourhood)
+```
+
+
+
+### SHS aggregated responses
+
+```{r}
+glimpse(shs_responses)
+skimr::skim(shs_responses)
+```
+
+- quite a lot of missing values in `satisfaction_with_nearest_green_space`, `highest_education_level`, `nearest_green_space_use`, `volunteering_last_twelve_months` (and 1 in `economic_status`)
+- 1 most common `n_persons` value
+- age is categorical/factor
+
+
+```{r}
+shs_responses %>% 
+  count(n_persons)
+
+shs_responses %>% 
+  count(satisfaction_with_nearest_green_space)
+
+shs_responses %>% 
+  count(highest_education_level)
+
+shs_responses %>% 
+  count(volunteering_last_twelve_months)
+```
+
+```{r}
+shs_responses %>% 
+  filter(is.na(satisfaction_with_nearest_green_space) & is.na(nearest_green_space_use)) %>% 
+  count(year)
+
+shs_responses %>% 
+  count(year)
+```
+- looks like greenspace questions were not asked in 2017 or 2018
+
+```{r}
+shs_responses %>% 
+  filter(is.na(volunteering_last_twelve_months)) %>% 
+  count(year)
+```
+- volunteering was left out of 2012 survey
+
+
+
+```{r}
+shs_responses %>% 
+  filter(is.na(highest_education_level)) %>% 
+  count(year)
+```
+
+- `highest_education_level` has more of an unstructered nature to NAs
+
+```{r}
+shs_responses %>% 
+  filter(is.na(economic_status))
+```
+
+
+```{r}
+shs_responses %>% 
+  filter(n_persons > 1) %>% 
+  count(year)
+```
+
+- if limiting data to responses of individuals lose high proportion of data from 2012/17/18 
+- 2012 would be 80% complete
+- 2017 and 2018 would be roughly 69% complete
+- Is it worth it? 
+
+```{r, message=FALSE}
+#ggpairs(shs_responses)
+```
+
+
+### National Performance Framework
+
+```{r}
+glimpse(national_performance_framework)
+skimr::skim(national_performance_framework %>% 
+              filter(source == "Scottish Household Survey"))
+```
+
+- no missing values
+- should only select data relevant to task
+
+```{r}
+national_performance_framework %>% 
+  filter(source == "Scottish Household Survey") %>% 
+  count(measure)
+```
+
+```{r}
+national_performance_framework %>% 
+  filter(str_detect(indicator, "green") & 
+         outcome == "Communities")  
+
+
+national_performance_framework %>% 
+  filter(str_detect(indicator, "green") & 
+         outcome == "Communities" &
+         characteristic == "Age") %>% 
+  mutate(year = as.numeric(year),
+         figure = as.numeric(figure)) %>% 
+  ggplot(aes(x = year, y = figure, colour = breakdown)) +
+  geom_line() 
+```
+
+
+```{r}
+national_performance_framework %>% 
+  filter(str_detect(indicator, "green") & year == 2020)
+```
+- the 2020 question looks like it was intended to inform environmental policy not communities

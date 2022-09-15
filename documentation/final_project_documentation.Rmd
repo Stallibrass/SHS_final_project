@@ -52,7 +52,7 @@ Are there any ethical implications of the business requirements?
 
 ## Analysis
 
-#### Stages in the data analysis process
+1. explore the data
 
 What were the main stages in your data analysis process?
 
