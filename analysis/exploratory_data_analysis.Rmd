@@ -252,14 +252,14 @@ shs_responses %>%
 shs_responses %>% 
   count(year)
 ```
-- looks like greenspace questions were not asked in 2017 or 2018
+- looks like greenspace questions were not asked in 2017 or 2018 (NMAR)
 
 ```{r}
 shs_responses %>% 
   filter(is.na(volunteering_last_twelve_months)) %>% 
   count(year)
 ```
-- volunteering was left out of 2012 survey
+- volunteering was left out of 2012 survey (NMAR)
 
 
 
@@ -269,7 +269,7 @@ shs_responses %>%
   count(year)
 ```
 
-- `highest_education_level` has more of an unstructered nature to NAs
+- `highest_education_level` has more of an unstructered nature to NAs (MAR)
 
 ```{r}
 shs_responses %>% 
@@ -287,6 +287,15 @@ shs_responses %>%
 - 2012 would be 80% complete
 - 2017 and 2018 would be roughly 69% complete
 - Is it worth it? 
+
+```{r}
+shs_responses %>% 
+  distinct(nearest_green_space_use)
+
+shs_responses %>% 
+  distinct(volunteering_last_twelve_months)
+```
+
 
 ```{r, message=FALSE}
 #ggpairs(shs_responses)
@@ -332,3 +341,29 @@ national_performance_framework %>%
   filter(str_detect(indicator, "green") & year == 2020)
 ```
 - the 2020 question looks like it was intended to inform environmental policy not communities
+
+```{r}
+npf <- read_csv(here::here("clean_data/npf_shs_communities.csv"))
+```
+
+```{r}
+summary(npf)
+glimpse(npf)
+```
+
+```{r}
+community_belonging <- read_csv(here::here("clean_data/community_belonging_clean.csv"))
+glimpse(community_belonging)
+```
+
+```{r}
+community_belonging %>% 
+  pivot_longer(community_belonging,
+               names_to = "measure",
+               values_to = "response") %>% 
+  relocate(measure, .after = date_code) %>% 
+  relocate(response, .before = percent)
+```
+
+
+
