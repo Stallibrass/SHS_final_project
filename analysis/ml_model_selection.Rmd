@@ -1,0 +1,337 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+# Model Building
+
+
+## Load in libraries ----
+```{r}
+library(tidyverse)
+library(janitor)
+library(here)
+library(GGally)
+library(modelr)
+library(broom)
+library(pROC)
+library(glmulti)
+```
+
+## Read in data ----
+
+```{r}
+shs_responses <- read_csv(here::here("clean_data/shs_responses_clean.csv"))
+```
+
+```{r}
+glimpse(shs_responses)
+```
+
+
+```{r}
+shs_responses <- shs_responses %>% 
+   mutate(across(where(is_character), as_factor))
+
+skimr::skim(shs_responses)
+```
+
+## Binary logisitic regression ----
+
+```{r}
+# Recode neighbourhood_rating so responses are divided whether "good" or "poor"
+# New variable with logical binary whether rating was classed as "good"
+
+shs_responses_binary <- shs_responses %>% 
+  filter(neighbourhood_rating != "No opinion") %>% 
+  mutate(rating_good = if_else(neighbourhood_rating %in% c("Very good", "Fairly good"), TRUE, FALSE))
+
+```
+
+
+```{r, message=FALSE}
+# Check correlations
+# Split the data into 3 parts so ggpairs runs faster
+split1 <- shs_responses_binary %>% 
+  select(neighbourhood_rating,
+         community_belonging,
+         volunteering_last_twelve_months)
+
+split2 <- shs_responses_binary %>% 
+  select(neighbourhood_rating,
+         year,
+         age,
+         gender,
+         economic_status,
+         household_size,
+         highest_education_level)
+
+split3 <- shs_responses_binary %>% 
+  select(neighbourhood_rating,
+         distance_to_nearest_green_space,
+         satisfaction_with_nearest_green_space,
+         nearest_green_space_use)
+
+#ggpairs(split1)
+#ggpairs(split2)
+#ggpairs(split3)
+
+```
+
+
+```{r}
+# Test/train/validate split
+
+test <- slice_sample(shs_responses_binary, prop = 0.2)
+validate <- slice_sample(shs_responses_binary, prop = 0.2)
+train <- slice_sample(shs_responses_binary, prop = 0.6)
+```
+
+
+## 1 Predictor Model
+
+```{r}
+# Perform logistic regression on neighbourhood_rating by single categorical predictor
+# distance_to_nearest_greenspace
+
+rating_nearest_logreg_model <- glm(rating_good ~ distance_to_nearest_green_space,
+                                   data = train,
+                                   family = binomial(link = "logit"))
+
+
+tidy_model <- clean_names(tidy(rating_nearest_logreg_model))
+tidy_model
+
+summary(rating_nearest_logreg_model)
+```
+
+
+```{r}
+# Test model on test set
+predictions_test <- test %>% 
+  add_predictions(rating_nearest_logreg_model, type = "response") %>% 
+  select(rating_good, pred)
+
+predictions_test
+```
+
+```{r}
+shs_responses_binary %>% 
+ count(rating_good)
+```
+
+
+
+```{r}
+# Add threshold
+threshold <- 0.9
+
+rating_1pred <- shs_responses_binary %>% 
+  add_predictions(rating_nearest_logreg_model, type = "response") %>% 
+  mutate(pred_thresh_0.9 = pred >= threshold)
+
+```
+
+```{r}
+# AUC 
+
+roc_obj_1pred <- rating_1pred %>% 
+  roc(response = rating_good, predictor = pred)
+
+roc_curve <- ggroc(data = roc_obj_1pred, legacy.axes = TRUE) +
+  coord_fixed() +
+  ylab("sensitivity (TPR)") +
+  xlab("1-specificity (TNR)")
+
+roc_curve
+
+classifier <- tibble(
+  threshold = roc_obj_1pred$thresholds,
+  sensitivity = roc_obj_1pred$sensitivities,
+  specificity = roc_obj_1pred$specificities
+)
+
+roc_curve
+head(classifier)
+```
+
+* Doesn't look like a great model
+* ROC curve is only slightly better than chance
+
+## Multi-predictor Model
+
+```{r}
+# Build a multi-predictor (without interactions) model
+# forward model production
+
+model_2pred <- glm(rating_good ~ distance_to_nearest_green_space + community_belonging,
+                                   data = train,
+                                   family = binomial(link = "logit"))
+
+
+tidy_model_2pred<- clean_names(tidy(model_2pred))
+tidy_model_2pred
+
+summary(model_2pred)
+
+```
+
+```{r, message=FALSE}
+# Check correlations again
+shs_responses_binary %>% 
+  select(-c(distance_to_nearest_green_space, community_belonging, neighbourhood_rating)) %>% 
+  ggpairs()
+```
+
+`satisfaction_with_neares_green_space` seems like it could be a good possible candidate
+
+```{r}
+# Model with 3 predictors
+model_3pred <- glm(rating_good ~ distance_to_nearest_green_space + 
+                   community_belonging + satisfaction_with_nearest_green_space,
+                   data = train,
+                   family = binomial(link = "logit"))
+
+
+tidy_model_3pred<- clean_names(tidy(model_3pred))
+tidy_model_3pred
+
+summary(model_3pred)
+
+
+```
+Predictors still look fairly significant
+
+```{r, message=FALSE}
+# Check correlations again
+shs_responses_binary %>% 
+  select(-c(distance_to_nearest_green_space, 
+            community_belonging, 
+            neighbourhood_rating, 
+            satisfaction_with_nearest_green_space)) %>% 
+  ggpairs()
+```
+
+`nearest_green_space_use` could also be interesting to look at
+
+```{r}
+# Try out a model with 4 predictors
+model_4pred <- glm(rating_good ~ distance_to_nearest_green_space + 
+                     community_belonging + 
+                     satisfaction_with_nearest_green_space +
+                     nearest_green_space_use,
+                     data = train,
+                     family = binomial(link = "logit"))
+
+
+tidy_model_4pred<- clean_names(tidy(model_4pred))
+tidy_model_4pred
+
+summary(model_4pred)
+
+```
+
+* predictors are still mostly significant, aic score not much lower
+
+```{r, message=FALSE}
+# Check correlations again
+shs_responses_binary %>% 
+  select(-c(distance_to_nearest_green_space, 
+            community_belonging, 
+            neighbourhood_rating, 
+            satisfaction_with_nearest_green_space,
+            nearest_green_space_use)) %>% 
+  ggpairs()
+
+```
+
+* `economic_status` maybe?
+
+```{r}
+# One last logistic model with 5 predictors
+model_5pred <- glm(rating_good ~ distance_to_nearest_green_space + 
+                     community_belonging + 
+                     satisfaction_with_nearest_green_space +
+                     nearest_green_space_use +
+                     economic_status,
+                     data = train,
+                     family = binomial(link = "logit"))
+
+
+tidy_model_5pred<- clean_names(tidy(model_5pred))
+
+
+summary(model_5pred)
+
+```
+
+AIC is down but at what cost? Drop in AIC after 3 predictors is quite a bit lower than from 2 to 3 predictors
+
+
+```{r}
+# AUC for 2 predictor model
+
+rating_2pred <- shs_responses_binary %>% 
+  add_predictions(model_2pred, type = "response")
+
+roc_obj_2pred <- rating_2pred %>% 
+  roc(response = rating_good, predictor = pred)
+
+roc_curve_2pred <- ggroc(data = roc_obj_2pred, legacy.axes = TRUE) +
+  coord_fixed() +
+  ylab("sensitivity (TPR)") +
+  xlab("1-specificity (TNR)")
+
+
+classifier_2pred <- tibble(
+  threshold = roc_obj_2pred$thresholds,
+  sensitivity = roc_obj_2pred$sensitivities,
+  specificity = roc_obj_2pred$specificities
+)
+
+roc_curve_2pred
+head(classifier_2pred)
+```
+
+
+
+```{r}
+# AUC for 3 predictor model
+
+rating_3pred <- shs_responses_binary %>% 
+  add_predictions(model_3pred, type = "response")
+
+roc_obj_3pred <- rating_3pred %>% 
+  roc(response = rating_good, predictor = pred)
+
+roc_curve_3pred <- ggroc(data = roc_obj_3pred, legacy.axes = TRUE) +
+  coord_fixed() +
+  ylab("sensitivity (TPR)") +
+  xlab("1-specificity (TNR)")
+
+
+classifier_3pred <- tibble(
+  threshold = roc_obj_3pred$thresholds,
+  sensitivity = roc_obj_3pred$sensitivities,
+  specificity = roc_obj_3pred$specificities
+)
+
+roc_curve_3pred
+head(classifier_3pred)
+
+```
+
+A lot better than the 1 predictor model. Hard to see whether it's any better than 2 predictor model.
+
+```{r}
+roc_curve_comparison <- ggroc(data = list(pred3 = roc_obj_3pred, pred2 = roc_obj_2pred), legacy.axes = TRUE) +
+  coord_fixed()
+
+roc_curve_comparison
+```
+
+3 predictors are better than 2. 
+
+_Next:_
+- test/validate
+- tru decision tree/random forests
+

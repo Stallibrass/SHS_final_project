@@ -230,6 +230,7 @@ skimr::skim(shs_responses)
 - age is categorical/factor
 
 
+
 ```{r}
 shs_responses %>% 
   count(n_persons)
@@ -296,9 +297,39 @@ shs_responses %>%
   distinct(volunteering_last_twelve_months)
 ```
 
+```{r}
+shs_responses %>% 
+  ggplot() +
+  geom_bar(aes(x = neighbourhood_rating))
+```
+
+
 
 ```{r, message=FALSE}
-#ggpairs(shs_responses)
+
+split1 <- shs_responses_imp %>% 
+  select(neighbourhood_rating, 
+         community_belonging, 
+         volunteering_last_twelve_months)
+
+split2 <- shs_responses_imp %>% 
+  select(neighbourhood_rating, 
+         year, 
+         age, 
+         economic_status,
+         household_size,
+         highest_education_level)
+
+split3 <- shs_responses_imp %>% 
+  select(neighbourhood_rating,
+         distance_to_nearest_green_space,
+         satisfaction_with_nearest_green_space,
+         nearest_green_space_use)
+
+ggpairs(split1)
+ggpairs(split2)
+ggpairs(split3)
+
 ```
 
 
