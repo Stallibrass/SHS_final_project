@@ -1,0 +1,220 @@
+---
+title: "Random Forest Model"
+output: html_notebook
+---
+# load in libraries ----
+```{r}
+library(janitor)
+library(here)
+library(rpart)
+library(rpart.plot)
+library(ranger)
+library(yardstick)
+library(caret)
+library(tidyverse)
+```
+
+# Read in data ----
+
+```{r}
+shs_responses <- read_csv(here::here("clean_data/shs_responses_clean.csv"))
+
+glimpse(shs_responses)
+
+```
+
+# Data Cleaning ----
+
+```{r}
+shs_responses <- shs_responses %>% 
+  mutate(across(where(is_character), as_factor)) 
+ 
+
+# Order factors
+shs_responses$neighbourhood_rating <- ordered(shs_responses$neighbourhood_rating,
+                                              levels = c("Very good", 
+                                                         "Fairly good", 
+                                                         "No opinion", # middle position as proxy for neutrality
+                                                         "Fairly poor",
+                                                         "Very poor"))
+
+shs_responses$community_belonging <- ordered(shs_responses$community_belonging,
+                                             levels = c("Very strongly",
+                                                        "Fairly strongly",
+                                                        "Don't know",
+                                                        "Not very strongly",
+                                                        "Not at all strongly"))
+
+shs_responses$distance_to_nearest_green_space <- ordered(shs_responses$distance_to_nearest_green_space,
+                                                         levels = c("Less than 5 minutes",
+                                                                    "Between 6 and 10 minutes",
+                                                                    "Between 11 and 20 minutes",
+                                                                    "Between 21 and 30 minutes",
+                                                                    "More than 30 minutes",
+                                                                    "Don't know"))
+shs_responses$satisfaction_with_nearest_green_space <- ordered(shs_responses$satisfaction_with_nearest_green_space,
+                                                               levels = c("Very satisfied",
+                                                                          "Fairly satisfied",
+                                                                          "No opinion",
+                                                                          "Fairly dissatisfied",
+                                                                          "Very dissatisfied"))
+
+shs_responses$age <- ordered(shs_responses$age,
+                             levels = c("16 - 34 Years",
+                                        "35 - 64 Years",
+                                        "65 + Years"))
+
+shs_responses$nearest_green_space_use <- ordered(shs_responses$nearest_green_space_use,
+                                                 levels = c("Every day",
+                                                            "Several times a week",
+                                                            "Once a week",
+                                                            "Don't know",
+                                                            "Several times a month",
+                                                            "Once a month",
+                                                            "Not at all"))
+
+skimr::skim(shs_responses)
+```
+
+## Test/train/validate split
+
+```{r}
+test <- slice_sample(shs_responses, prop = 0.2)
+validate <- slice_sample(shs_responses, prop = 0.2)
+train <- slice_sample(shs_responses, prop = 0.6) 
+```
+
+
+# Random Forest Model ----
+
+```{r}
+# Create RF model
+rf_classifier <- ranger(neighbourhood_rating ~.,
+                        data = train, 
+                        importance = "impurity",
+                        num.trees = 1000, # num of trees to construct
+                        mtry = 2, # num of variables to split at each node
+                        min.node.size = 5) # regression model
+
+rf_classifier
+importance(rf_classifier)
+sqrt(rf_classifier$prediction.error) # OOB RMSE
+```
+OOB 39%
+OOB RMSE 0.625
+
+_Most important variables_
+1. `community_belonging` 
+2. `year`
+3. `satisfaction_with_nearest_green_space`
+
+_Least important variables_
+1. `volunteering_last_twelve_months`
+2. `gender`
+3. `age`
+
+## Test model
+
+```{r}
+rf_test_pred <- test %>% 
+  mutate(pred = predict(rf_classifier, data = test)$predictions)
+
+confusionMatrix(rf_test_pred$pred, rf_test_pred$neighbourhood_rating)
+```
+Accuracy: 68%
+Better sens/spec for Very good and Fairly good (to do with the data?) 
+
+## Validate model
+
+```{r}
+rf_validate_pred<- validate%>% 
+  mutate(pred = predict(rf_classifier, data = validate)$predictions)
+
+rf_validate_pred %>% 
+  select(neighbourhood_rating, pred)
+
+confusionMatrix(rf_validate_pred$pred, rf_validate_pred$neighbourhood_rating)
+```
+
+
+# Fine-tuning the model ----
+
+```{r}
+# change the number of variables at each node
+# Boehmke & Greenwell (2020) suggest floor(num of features / 3)
+
+n_features <- length(setdiff(names(shs_responses), "neighbourhood_rating"))
+
+rf_classifier_2 <- ranger(neighbourhood_rating ~.,
+                        data = train, 
+                        importance = "impurity",
+                        num.trees = 1000, 
+                        mtry = floor(n_features/3), 
+                        min.node.size = 5)
+
+rf_classifier_2
+sqrt(rf_classifier_2$prediction.error) 
+importance(rf_classifier_2)
+```
+OOB 39.5%
+OOB RMSE 0.628
+
+## Test the model
+```{r}
+rf_test_pred_2<- test %>% 
+  mutate(pred = predict(rf_classifier_2, data = test)$predictions)
+
+confusionMatrix(rf_test_pred_2$pred, rf_test_pred_2$neighbourhood_rating)
+```
+
+Accuracy = 75%
+sens/spec scores are better all-round
+
+
+```{r}
+# Try a model with more trees
+
+rf_classifier_3 <- ranger(neighbourhood_rating ~.,
+                        data = train, 
+                        importance = "impurity",
+                        num.trees = 10000, # 10000 trees
+                        mtry = 2, 
+                        min.node.size = 5) 
+
+rf_classifier_3
+importance(rf_classifier_3)
+sqrt(rf_classifier_3$prediction.error) 
+```
+OOB 38.9%
+OOB RMSE 0.624
+
+```{r}
+rf_test_pred_3<- test %>% 
+  mutate(pred = predict(rf_classifier_3, data = test)$predictions)
+
+confusionMatrix(rf_test_pred_3$pred, rf_test_pred_3$neighbourhood_rating)
+```
+Accuracy 68% 
+Previous model better
+
+# Validate model
+The second model is the preferred
+
+```{r}
+rf_validate_pred_2<- validate%>% 
+  mutate(pred = predict(rf_classifier_2, data = validate)$predictions)
+
+rf_validate_pred_2 %>% 
+  select(neighbourhood_rating, pred)
+
+confusionMatrix(rf_validate_pred_2$pred, rf_validate_pred_2$neighbourhood_rating)
+```
+
+
+```{r}
+# Plot the importance of variables
+
+plot <- vip::vip(rf_classifier_2, num_features = 11)
+
+plot
+```

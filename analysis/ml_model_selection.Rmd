@@ -1,13 +1,10 @@
 ---
-title: "R Notebook"
+title: "ML Model Building and Selection"
 output: html_notebook
 ---
-# Model Building
-
 
 ## Load in libraries ----
 ```{r}
-library(tidyverse)
 library(janitor)
 library(here)
 library(GGally)
@@ -15,6 +12,15 @@ library(modelr)
 library(broom)
 library(pROC)
 library(glmulti)
+library(rpart)
+library(rpart.plot)
+library(ranger)
+library(yardstick)
+library(caret)
+library(MASS)
+library(Hmisc)
+library(reshape2)
+library(tidyverse) # load tidyverse last as some dplyr verbs masked by other packages
 ```
 
 ## Read in data ----
@@ -30,12 +36,14 @@ glimpse(shs_responses)
 
 ```{r}
 shs_responses <- shs_responses %>% 
-   mutate(across(where(is_character), as_factor))
+  mutate(across(where(is_character), as_factor)) 
+
 
 skimr::skim(shs_responses)
+class(shs_responses$neighbourhood_rating)
 ```
 
-## Binary logisitic regression ----
+# Binary logisitic regression ----
 
 ```{r}
 # Recode neighbourhood_rating so responses are divided whether "good" or "poor"
@@ -53,12 +61,12 @@ shs_responses_binary <- shs_responses %>%
 # Split the data into 3 parts so ggpairs runs faster
 split1 <- shs_responses_binary %>% 
   select(neighbourhood_rating,
+         year,
          community_belonging,
-         volunteering_last_twelve_months)
+         distance_to_nearest_green_space)
 
 split2 <- shs_responses_binary %>% 
   select(neighbourhood_rating,
-         year,
          age,
          gender,
          economic_status,
@@ -67,16 +75,16 @@ split2 <- shs_responses_binary %>%
 
 split3 <- shs_responses_binary %>% 
   select(neighbourhood_rating,
-         distance_to_nearest_green_space,
          satisfaction_with_nearest_green_space,
-         nearest_green_space_use)
+         nearest_green_space_use,
+         volunteering_last_twelve_months)
 
-#ggpairs(split1)
-#ggpairs(split2)
-#ggpairs(split3)
+ggpairs(split1)
+ggpairs(split2)
+ggpairs(split3)
 
 ```
-
+Difficult to evaluate these correlations as most variables categorical
 
 ```{r}
 # Test/train/validate split
@@ -116,7 +124,7 @@ predictions_test
 
 ```{r}
 shs_responses_binary %>% 
- count(rating_good)
+  count(rating_good)
 ```
 
 
@@ -129,6 +137,7 @@ rating_1pred <- shs_responses_binary %>%
   add_predictions(rating_nearest_logreg_model, type = "response") %>% 
   mutate(pred_thresh_0.9 = pred >= threshold)
 
+rating_1pred
 ```
 
 ```{r}
@@ -164,8 +173,8 @@ head(classifier)
 # forward model production
 
 model_2pred <- glm(rating_good ~ distance_to_nearest_green_space + community_belonging,
-                                   data = train,
-                                   family = binomial(link = "logit"))
+                   data = train,
+                   family = binomial(link = "logit"))
 
 
 tidy_model_2pred<- clean_names(tidy(model_2pred))
@@ -187,7 +196,7 @@ shs_responses_binary %>%
 ```{r}
 # Model with 3 predictors
 model_3pred <- glm(rating_good ~ distance_to_nearest_green_space + 
-                   community_belonging + satisfaction_with_nearest_green_space,
+                     community_belonging + satisfaction_with_nearest_green_space,
                    data = train,
                    family = binomial(link = "logit"))
 
@@ -219,8 +228,8 @@ model_4pred <- glm(rating_good ~ distance_to_nearest_green_space +
                      community_belonging + 
                      satisfaction_with_nearest_green_space +
                      nearest_green_space_use,
-                     data = train,
-                     family = binomial(link = "logit"))
+                   data = train,
+                   family = binomial(link = "logit"))
 
 
 tidy_model_4pred<- clean_names(tidy(model_4pred))
@@ -253,8 +262,8 @@ model_5pred <- glm(rating_good ~ distance_to_nearest_green_space +
                      satisfaction_with_nearest_green_space +
                      nearest_green_space_use +
                      economic_status,
-                     data = train,
-                     family = binomial(link = "logit"))
+                   data = train,
+                   family = binomial(link = "logit"))
 
 
 tidy_model_5pred<- clean_names(tidy(model_5pred))
@@ -320,18 +329,258 @@ head(classifier_3pred)
 
 ```
 
+```{r}
+threshold_0.3 <- 0.3
+rating_3pred %>% 
+  mutate(pred_thresh_0.3 = pred >= threshold_0.3) %>% 
+  count(pred_thresh_0.3)
+```
+
+
 A lot better than the 1 predictor model. Hard to see whether it's any better than 2 predictor model.
 
 ```{r}
 roc_curve_comparison <- ggroc(data = list(pred3 = roc_obj_3pred, pred2 = roc_obj_2pred), legacy.axes = TRUE) +
   coord_fixed()
 
+
+auc(roc_obj_2pred, )
+auc(roc_obj_3pred, )
 roc_curve_comparison
 ```
 
 3 predictors are better than 2. 
 
-_Next:_
-- test/validate
-- tru decision tree/random forests
+_test and validate_
 
+
+# Decision tree model ----
+
+```{r}
+test_2 <- slice_sample(shs_responses, prop = 0.2)
+validate_2 <- slice_sample(shs_responses, prop = 0.2)
+train_2 <- slice_sample(shs_responses, prop = 0.6) 
+
+
+shs_tree <- rpart(
+  formula = neighbourhood_rating ~., 
+  data = train_2, 
+  method = "class"
+)
+
+rpart.plot(shs_tree,
+           yesno = 2,
+           fallen.leaves = TRUE,
+           faclen = 6,
+           digits = 4)
+```
+
+```{r}
+
+tree_test_pred <- test_2 %>% 
+  add_predictions(shs_tree, type = "class")
+```
+
+```{r}
+conf_mat <- tree_test_pred %>% 
+  conf_mat(truth = neighbourhood_rating, estimate = pred)
+
+conf_mat
+
+accuracy <- tree_test_pred %>% 
+  accuracy(truth = neighbourhood_rating, estimate = pred)
+
+sensitivity <- tree_test_pred %>% 
+  sens(truth = neighbourhood_rating, estimate = pred)
+
+specificity <- tree_test_pred %>% 
+  yardstick::spec(truth = neighbourhood_rating, estimate = pred)
+
+accuracy
+sensitivity
+specificity
+```
+
+# Random Forest Classifier ----
+```{r}
+# Random forest
+
+rf_classifier <- ranger(neighbourhood_rating ~.,
+                        data = train_2, 
+                        importance = "impurity",
+                        num.trees = 1000,
+                        mtry = 2,
+                        min.node.size = 5)
+
+rf_classifier
+```
+Prediction error of almost 40% is not the best
+
+```{r}
+importance(rf_classifier)
+```
+
+_Most important variables_
+1. `community_belonging` 
+2. `year`
+3. `satisfaction_with_nearest_green_space`
+
+_Least important variables_
+1. `volunteering_last_twelve_months`
+2. `gender`
+3. `age`
+
+
+```{r}
+tree_test_pred <- test_2 %>% 
+  mutate(pred = predict(rf_classifier, data = test_2)$predictions)
+
+confusionMatrix(tree_test_pred$pred, tree_test_pred$neighbourhood_rating)
+```
+
+### Just a test to see whether the RF imputation of NAs has a major effect on performance
+```{r}
+shs_responses_raw <- read_csv(here::here("raw_data/shs_aggregate_responses.csv")) %>% 
+  clean_names() %>% 
+  filter(n_persons == 1) %>% 
+  select(-n_persons)
+
+skimr::skim(shs_responses_raw)
+
+shs_responses_raw <- shs_responses_raw %>% 
+  mutate(across(where(is_character), ~replace_na(.x, "Not known"))) %>% 
+  mutate(across(where(is_character), as_factor))
+```
+
+
+
+
+```{r}
+test_3 <- slice_sample(shs_responses_raw, prop = 0.2)
+validate_3 <- slice_sample(shs_responses_raw, prop = 0.2)
+train_3 <- slice_sample(shs_responses_raw, prop = 0.6) 
+
+rf_classifier_raw <- ranger(neighbourhood_rating ~.,
+                            data = train_3, 
+                            importance = "impurity",
+                            num.trees = 1000,
+                            mtry = 2,
+                            min.node.size = 5)
+
+rf_classifier_raw
+
+importance(rf_classifier_raw)
+```
+Imputation using a random forest doesn't seem to have altered the data in a significant way compared to a new class imputation
+
+```{r}
+# Now with dropping NAs (but they are MNAR, so not the best approach)
+shs_responses_non_imp <- read_csv(here::here("raw_data/shs_aggregate_responses.csv")) %>% 
+  clean_names() %>% 
+  filter(n_persons == 1) %>% 
+  select(-n_persons) %>% 
+  na.omit()
+
+shs_responses_non_imp <- shs_responses_non_imp %>% 
+  mutate(across(where(is_character), as_factor))
+skimr::skim(shs_responses_non_imp)
+```
+
+```{r}
+test_4 <- slice_sample(shs_responses_non_imp, prop = 0.2)
+validate_4 <- slice_sample(shs_responses_non_imp, prop = 0.2)
+train_4 <- slice_sample(shs_responses_non_imp, prop = 0.6) 
+
+rf_classifier_non_imp <- ranger(neighbourhood_rating ~.,
+                                data = train_4, 
+                                importance = "impurity",
+                                num.trees = 1000,
+                                mtry = 2,
+                                min.node.size = 5)
+
+rf_classifier_non_imp
+
+importance(rf_classifier_non_imp)
+```
+Maybe taking out nas is worth it?
+
+```{r}
+tree_test_pred_non_imp <- test_4 %>% 
+  mutate(pred = predict(rf_classifier_non_imp, data = test_4)$predictions)
+
+confusionMatrix(tree_test_pred_non_imp$pred, tree_test_pred_non_imp$neighbourhood_rating)
+```
+
+Accuracy hasn't gone up that much. I'd prefer to stick with the model with imputed values. 
+
+# Ordinal logistic regression ----
+
+```{r}
+train_2$neighbourhood_rating <- ordered(train_2$neighbourhood_rating,
+                                        levels = c("Very good", 
+                                                   "Fairly good", 
+                                                   "No opinion", 
+                                                   "Fairly poor",
+                                                   "Very poor"))
+
+test_2$neighbourhood_rating <- ordered(test_2$neighbourhood_rating,
+                                       levels = c("Very good", 
+                                                  "Fairly good", 
+                                                  "No opinion", 
+                                                  "Fairly poor",
+                                                  "Very poor"))
+```
+
+
+```{r}
+# Following workflow from https://www.analyticsvidhya.com/blog/2016/02/multinomial-ordinal-logistic-regression/#h2_7 [accessed 19/09/22]
+# Creat ordered model using polr()
+ordered_model_1pred <- polr(neighbourhood_rating ~ distance_to_nearest_green_space,
+                            data = train_2,
+                            Hess = TRUE)
+
+summary(ordered_model_1pred)
+```
+
+```{r}
+# Calculate p-value and odds ratio
+
+ctable <- coef(summary(ordered_model_1pred))
+ctable
+
+# p-value
+p <- pnorm(abs(ctable[, "t value"]), lower.tail = FALSE) * 2
+ctable <- bind_cols(ctable, "p value" = p)
+ctable # Have to compare with summary to get the variable names
+
+# odds ration
+exp(coef(ordered_model_1pred))
+```
+
+# Top 3 models ----
+
+1. Random Forest model (with imputed values from missForest)
+_Pros_
+* Keeps information
+* Able to see most important variables
+* 70% accuracy (could be more with fine-tuning of hyperparameters and validation)
+_Cons_
+* 40% OOB error (need to research this more)
+
+2. Logistic 3 predictor model
+_Pros_
+* AUC of 0.79
+* good sensitivity value (could be to do with the data)
+_Cons_
+* bad specificity
+* lose info on dependent variable 
+
+3. Ordinal Regression
+_Pros_
+* Keeps info and orders dependent variable (without assumption of equal distance)
+* Significant p-values
+* Odds ratio for each level
+* Interacts levels
+_Cons_
+* Hard to interpret  *
+* I'm not familiar with it
