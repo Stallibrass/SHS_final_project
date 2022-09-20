@@ -1,0 +1,15 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(here)
+```
+
+```{r}
+shs_data <- read_csv(here::here("clean_data/shs_data.csv"))
+glimpse(shs_data)
+```
+
