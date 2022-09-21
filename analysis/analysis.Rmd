@@ -1,15 +1,507 @@
 ---
-title: "R Notebook"
+title: "Analysis and visualisations"
 output: html_notebook
 ---
-
+# Load libraries ----
 ```{r}
 library(tidyverse)
 library(here)
 ```
-
+# Read in the data ----
 ```{r}
 shs_data <- read_csv(here::here("clean_data/shs_data.csv"))
+
+# Additional data cleaning
+shs_data <- shs_data %>% 
+  select(-age) %>% # over 55000 NAs 
+  mutate(across(where(is_character), str_to_sentence)) %>% 
+  mutate(feature_name = str_to_title(feature_name)) %>% 
+  mutate(measure = str_replace_all(measure, "_", " ")) %>% 
+  rename(year = date_code)
+
+
 glimpse(shs_data)
+```
+
+# Explore the data ----
+
+```{r}
+skimr::skim(shs_data)
+```
+
+The data is aggregated from several datasets, covering 2013-2019 (`year`). 
+The `percent` column is an estimate of the percentage of respondents that answered the survey. 
+The `measure` column represents what factor is being measured. 
+`response` relates to the response to a particular question (aka `measure`) from the SHS. 
+`feature_name`, `feature_code` and `feature_type` all correspond to the location of the respondent. `urban_rural_classification` classifiers the area of a respondent as either being rural or urban. 
+`gender` can either be "Male" or "Female". 
+`household_type` refers to who lives in the property, "Adults", "Pensioners" or "With children". 
+`type_of_tenure` captures whether the property is "Owned", "Owned mortgage/loan", "Private rented", "Social rented" or "Other". 
+`SIMD_quintiles` includes the top and lower 20% of the deprivation scale. 
+`ethnicity` records the ethnicity of respondents as either "White" or "Other".
+`walking_distance_to_nearest_greenspace` refers to the distance respondents have to walk to greenspace. NAs are present where data in the `measure` column relates to distance to greenspace.  
+Data is aggregated across all columns to include "All" levels. 
+
+
+# Visualisations ----
+
+### Are there big differences in how far people have to walk to access their greenspaces?
+
+```{r}
+# Across Scotland
+distance_to_greenspace_scotland <- shs_data %>% 
+  filter(measure == "Distance to nearest green or blue space" &
+           feature_name == "Scotland" &
+           gender == "All" &
+           urban_rural_classification == "All" &
+           simd_quintiles == "All" &
+           type_of_tenure  == "All" &
+           household_type  == "All" &
+           ethnicity == "All") %>% 
+  group_by(response) %>% 
+  mutate(percentage_2013_2019 = mean(percent)) %>% 
+  unique() 
+
+distance_scotland_plot <- distance_to_greenspace_scotland %>% 
+  distinct(percentage_2013_2019) %>% 
+  mutate(response = factor(response, 
+                           ordered = TRUE, 
+                           levels = c("A 5 minute walk or less",
+                                      "Within a 6-10 minute walk",
+                                      "An 11 minute walk or more",
+                                      "Don't know"))) %>% 
+  ggplot(aes(x = response, y = percentage_2013_2019)) +
+  geom_col(fill = "deepskyblue4") +
+  theme_minimal() +
+  labs(title = "Distance to nearest greenspace",
+       subtitle = "Scotland 2013-2019") +
+  xlab("Distance") +
+  ylab("Percentage") +
+  coord_flip()
+
+```
+
+
+```{r}
+# Distance by area
+distance_by_area <- shs_data %>% 
+  filter(measure == "Distance to nearest green or blue space" &
+           feature_name != "Scotland" &
+           gender == "All" &
+           urban_rural_classification == "All" &
+           simd_quintiles == "All" &
+           type_of_tenure  == "All" &
+           household_type  == "All" &
+           ethnicity == "All") %>% 
+  group_by(response, feature_name) %>% 
+  mutate(percentage_2013_2019 = mean(percent)) %>% 
+  unique() 
+
+distance_5_min_by_area <- distance_by_area %>% 
+  filter(response == "A 5 minute walk or less") %>% 
+  distinct(percentage_2013_2019) 
+# mutate(percentage_threshold = case_when(
+#   percentage_2013_2019 >= 80 ~ "> 80%",
+#   percentage_2013_2019 >= 75 & percentage_2013_2019 < 80 ~ "75-80%",
+#   percentage_2013_2019 >= 70 & percentage_2013_2019 < 75 ~ "70-75%",
+#   percentage_2013_2019 >= 65 & percentage_2013_2019 < 70 ~ "65-70%",
+#   percentage_2013_2019 >= 60 & percentage_2013_2019 < 65 ~ "60-65%",
+#   percentage_2013_2019 >= 50 & percentage_2013_2019 < 60 ~ "50-60%",
+#   percentage_2013_2019 >= 40 & percentage_2013_2019 < 50 ~ "40-50%",
+#   TRUE ~ "Other")) %>% 
+# mutate(percentage_threshold = factor(percentage_threshold, 
+#                                      ordered = TRUE, 
+#                                      levels = c("> 80%",
+#                                                 "75-80%",
+#                                                 "70-75%",
+#                                                 "65-70%",
+#                                                 "60-65%",
+#                                                 "50-60%",
+#                                                 "40-50%")))
+
+distance_5_min_by_area$feature_name = with(distance_5_min_by_area, reorder(feature_name, percentage_2013_2019, decreasing = FALSE))
+
+distance_by_area_plot <- distance_5_min_by_area %>% 
+  ggplot(aes(x = feature_name, y = percentage_2013_2019)) +
+  geom_col(fill = "deepskyblue4") +
+  theme_minimal() +
+  coord_flip() +
+  labs(title = "Percentage of respondents living 5 minutes walk from greenspace",
+       subtitle = "2013-2019",
+       x = "Area",
+       y = "Percentage")
+
+distance_area_plot_2 <- distance_5_min_by_area %>% 
+  ggplot(aes(x = feature_name, y = percentage_2013_2019)) +
+  geom_segment(aes(x = feature_name, xend = feature_name, y = 0, yend = percentage_2013_2019)) +
+  geom_point(size = 1, colour = "deepskyblue4", fill = alpha("deepskyblue4", 0.3), alpha = 0.7, shape = 21, stroke=2) +
+  theme_minimal() +
+  coord_flip() +
+  labs(title = "Percentage of respondents living 5 minutes walk from greenspace",
+       subtitle = "Scotland 2013-2019",
+       x = "Area",
+       y = "Percentage")
+```
+
+
+
+```{r}
+# Distance in neighbourhood rating by distance to greenspace
+neighbourhood_rating_distance <- shs_data %>% 
+  filter(walking_distance_to_nearest_greenspace %in% c("More than 10 minutes", 
+                                                       "Less than 10 minutes")) %>% 
+  filter(measure == "Neighbourhood rating") %>% 
+  filter(feature_name == "Scotland" &
+           gender == "All" &
+           urban_rural_classification == "All" &
+           simd_quintiles == "All" &
+           type_of_tenure  == "All" &
+           household_type  == "All" &
+           ethnicity == "All" &
+           response != "No opinion") %>% 
+  group_by(response, walking_distance_to_nearest_greenspace) %>% 
+  mutate(percentage_2013_2019 = mean(percent))
+
+neighbourhood_distance_plot <- neighbourhood_rating_distance %>% 
+  mutate(response = factor(response, 
+                           ordered = TRUE,
+                           levels = c("Very good",
+                                      "Fairly good", 
+                                      "Fairly poor",
+                                      "Very poor"))) %>%
+  mutate(walking_distance_to_nearest_greenspace = factor(walking_distance_to_nearest_greenspace)) %>% 
+  ggplot(aes(x = response, y = percentage_2013_2019, 
+             fill = walking_distance_to_nearest_greenspace)) +
+  geom_col(position = "dodge") +
+  scale_fill_manual(values = c("darkslategray3", "deepskyblue4")) +
+  theme_minimal() +
+  labs(title = "Neighbourhood rating by walking distance to greenspace",
+       subtitle = "Scotland 2013-2019",
+       x = "Rating",
+       y = "Percentage") +
+  guides(fill = guide_legend(title = "Walking distance to nearest greenspace"))
+
+
+```
+
+```{r}
+# Neighbourhood by walking distance urban/rural
+
+# neighbourhood_rating_distance_urban <- shs_data %>% 
+#    filter(measure == "Neighbourhood rating") %>% 
+#            urban_rural_classification == "Urban" | 
+#            urban_rural_classification == "Rural") %>% 
+#   filter(response != "No opinion") %>% 
+#   group_by(response) %>% 
+#   mutate(percentage_2013_2019 = mean(percent))
+# 
+# neighbourhood_distance_plot_urban <- neighbourhood_rating_distance_urban %>% 
+#   mutate(response = factor(response, 
+#                            ordered = TRUE,
+#                            levels = c("Very good",
+#                                       "Fairly good", 
+#                                       "Fairly poor",
+#                                       "Very poor"))) %>%
+#   ggplot(aes(x = response, y = percentage_2013_2019, 
+#              fill = urban_rural_classification)) +
+#   geom_col(position = "dodge") +
+#   scale_fill_manual(values = c("darkslategray3", "deepskyblue4")) +
+#   theme_minimal() +
+#   labs(title = "Neighbourhood rating by urban or rural classification",
+#        subtitle = "Scotland 2013-2019",
+#        x = "Rating",
+#        y = "Percentage") +
+#   guides(fill = guide_legend(title = "Urban or Rural"))
+# 
+# shs_data %>% 
+#   filter(measure == "Neighbourhood rating" & urban_rural_classification == "Urban" | urban_rural_classification == "Rural") %>% 
+#   count(walking_distance_to_nearest_greenspace)
+```
+
+
+### Changes over time
+```{r}
+# Neighbourhood rating
+rating_time <- shs_data %>% 
+  filter(measure == "Neighbourhood rating") %>% 
+  filter(feature_name == "Scotland" &
+           gender == "All" &
+           urban_rural_classification == "All" &
+           simd_quintiles == "All" &
+           type_of_tenure  == "All" &
+           household_type  == "All" &
+           ethnicity == "All" &
+           response != "No opinion" &
+           walking_distance_to_nearest_greenspace == "All") %>% 
+  mutate(response = factor(response, 
+                           ordered = TRUE,
+                           levels = c("Very good",
+                                      "Fairly good", 
+                                      "Fairly poor",
+                                      "Very poor"))) %>% 
+  ggplot(aes(x = year, y = percent, colour = response)) +
+  geom_line() +
+  scale_color_manual(values = c("deepskyblue4", "darkslategray3", "darkgreen", "darkolivegreen")) +
+  theme_minimal() +
+  labs(title = "Neighbourhood rating over time",
+       subtitle = "Scotland 2013-2019",
+       x = "Year",
+       y = "Percentage") +
+  guides(fill = guide_legend(title = "Rating"))
+
+# over time by area
+rating_time_area <- shs_data %>% 
+  filter(measure == "Neighbourhood rating") %>% 
+  filter(gender == "All" &
+           urban_rural_classification == "All" &
+           simd_quintiles == "All" &
+           type_of_tenure  == "All" &
+           household_type  == "All" &
+           ethnicity == "All" &
+           response != "No opinion" &
+           walking_distance_to_nearest_greenspace == "All") %>% 
+  mutate(response = factor(response, 
+                           ordered = TRUE,
+                           levels = c("Very good",
+                                      "Fairly good", 
+                                      "Fairly poor",
+                                      "Very poor"))) %>% 
+  ggplot(aes(x = year, y = percent, colour = response)) +
+  geom_line() +
+  scale_colour_brewer(palette = "BrBG") +
+  #scale_color_manual(values = c("deepskyblue4", "darkslategray3", "darkgreen", "darkolivegreen")) +
+  theme_minimal() +
+  labs(title = "Neighbourhood rating over time",
+       subtitle = "Scotland 2013-2019",
+       x = "Year",
+       y = "Percentage") +
+  guides(fill = guide_legend(title = "Rating")) +
+  facet_wrap(~feature_name)
+
+rating_time_urban_rural <- shs_data %>% 
+  filter(measure == "Neighbourhood rating") %>% 
+  filter(feature_name == "Scotland" &
+           gender == "All" &
+           urban_rural_classification != "All" &
+           simd_quintiles == "All" &
+           type_of_tenure  == "All" &
+           household_type  == "All" &
+           ethnicity == "All" &
+           response != "No opinion" &
+           walking_distance_to_nearest_greenspace == "All") %>% 
+  mutate(response = factor(response, 
+                           ordered = TRUE,
+                           levels = c("Very good",
+                                      "Fairly good", 
+                                      "Fairly poor",
+                                      "Very poor"))) %>% 
+  ggplot(aes(x = year, y = percent, colour = response)) +
+  geom_line() +
+  scale_colour_brewer(palette = "BrBG") +
+  theme_minimal() +
+  labs(title = "Neighbourhood rating over time",
+       subtitle = "Scotland 2013-2019",
+       x = "Year",
+       y = "Percentage") +
+  guides(fill = guide_legend(title = "Rating")) +
+  facet_wrap(~ urban_rural_classification)
+```
+
+```{r}
+shs_data %>% 
+  select(feature_name, urban_rural_classification) %>% 
+  filter(urban_rural_classification != "All") %>% 
+  unique()
+```
+
+
+```{r}
+neighbourhood_rating_scotland <- shs_data %>% 
+  filter(measure == "Neighbourhood rating" &
+           feature_name == "Scotland" &
+           gender == "All" &
+           urban_rural_classification == "All" &
+           simd_quintiles == "All" &
+           type_of_tenure  == "All" &
+           household_type  == "All" &
+           ethnicity == "All") %>% 
+  group_by(response) %>% 
+  mutate(percentage_2013_2019 = mean(percent)) %>% 
+  unique() 
+
+
+neighbourhood_rating_scotland_plot <- neighbourhood_rating_scotland %>% 
+  distinct(percentage_2013_2019) %>% 
+  mutate(response = factor(response, 
+                           ordered = TRUE,
+                           levels = c("Very good",
+                                      "Fairly good", 
+                                      "Fairly poor",
+                                      "Very poor",
+                                      "No opinion")))%>% 
+  ggplot(aes(x = response, y = percentage_2013_2019)) +
+  geom_col(fill = "cyan4") +
+  theme_minimal() +
+  labs(title = "Neighbourhood rating",
+       subtitle = "Scotland 2013-2019") +
+  xlab("Rating") +
+  ylab("Percentage")
+```
+
+
+## Community Belonging
+```{r}
+community_belonging_time <- shs_data %>% 
+  filter(measure == "Community belonging") %>%
+  filter(
+    gender == "All" &
+      urban_rural_classification == "All" &
+      simd_quintiles == "All" &
+      type_of_tenure  == "All" &
+      household_type  == "All" &
+      ethnicity == "All" &
+      walking_distance_to_nearest_greenspace == "All") %>% 
+  mutate(response = factor(response, 
+                           ordered = TRUE,
+                           levels = c("Very strongly",
+                                      "Fairly strongly", 
+                                      "Don't know",
+                                      "Not very strongly",
+                                      "Not at all strongly"))) %>% 
+  ggplot(aes(x = year, y = percent, colour = response)) +
+  geom_line() +
+  scale_colour_brewer(palette = "BrBG") +
+  #scale_color_manual(values = c("deepskyblue4", "darkslategray3", "darkgreen", "darkolivegreen", "darkblue")) +
+  facet_wrap(~feature_name) +
+  labs(title = "Community belonging over time",
+       subtitle = "Scotland 2013-2019",
+       x = "Year",
+       y = "Percentage") +
+  guides(fill = guide_legend(title = "Rating")) 
+
+```
+
+```{r}
+
+```
+
+
+
+```{r}
+shs_data %>% 
+  filter(measure == "Community belonging") %>% 
+  distinct(response)
+```
+
+# Read in individualised data ----
+
+```{r}
+shs_responses <- read_csv(here::here("clean_data/shs_responses_clean.csv"))
+```
+
+```{r}
+skimr::skim(shs_responses)
+
+```
+
+```{r}
+# neighbourhood rating by community belonging 
+
+neighbourhood_community_rating <- shs_responses %>% 
+  group_by(community_belonging, neighbourhood_rating) %>% 
+  mutate(total_respondents = sum(n())) %>% 
+  distinct(total_respondents) %>% 
+  filter(neighbourhood_rating != "No opinion" &
+           community_belonging != "Don't know") %>% 
+  mutate(community_belonging = factor(community_belonging, 
+                                      ordered = TRUE,
+                                      levels = c("Very strongly",
+                                                 "Fairly strongly",
+                                                 "Not very strongly",
+                                                 "Not at all strongly"))) %>% 
+  mutate(neighbourhood_rating = factor(neighbourhood_rating, 
+                                       ordered = TRUE,
+                                       levels = c("Very good",
+                                                  "Fairly good",
+                                                  "Fairly poor",
+                                                  "Very poor"
+                                       ))) %>% 
+  ggplot(aes(x = neighbourhood_rating, y = total_respondents, fill = community_belonging)) +
+  geom_col(position = "dodge") +
+  scale_fill_brewer(palette = "BrBG") +
+  theme_minimal() +
+  labs(title = "Neighbourhood rating by sense of community belonging",
+       subtitle = "Scotland 2013-2019",
+       x = "Neighbourhood rating",
+       y = "Total respondents") +
+  guides(fill = guide_legend(title = "Community belonging")) 
+```
+
+```{r}
+neighbour_time <- shs_responses %>% 
+  group_by(year, neighbourhood_rating) %>% 
+  mutate(total_respondents = sum(n())) %>% 
+  distinct(total_respondents) %>% 
+  filter(neighbourhood_rating != "No opinion") %>% 
+  mutate(neighbourhood_rating = factor(neighbourhood_rating, 
+                                       ordered = TRUE,
+                                       levels = c("Very good",
+                                                  "Fairly good",
+                                                  "Fairly poor",
+                                                  "Very poor"
+                                       ))) %>% 
+  ggplot(aes(x = year, y = total_respondents, colour = neighbourhood_rating)) +
+  geom_line() +
+  scale_colour_brewer(palette = "BrBG") +
+  theme_minimal() +
+  labs(title = "Neighbourhood rating over time",
+       subtitle = "2013-2019",
+       x = "Year",
+       y = "Total respondents") +
+  theme(legend.title = element_blank())
+```
+
+```{r}
+use_rating <- shs_responses %>% 
+  group_by(nearest_green_space_use, neighbourhood_rating) %>% 
+  mutate(total_respondents = sum(n())) %>% 
+  distinct(total_respondents) %>% 
+  filter(neighbourhood_rating != "No opinion") %>% 
+  mutate(nearest_green_space_use = factor(nearest_green_space_use, 
+                                          ordered = TRUE,
+                                          levels = c("Every day",
+                                                     "Several times a week",
+                                                     "Once a week",
+                                                     "Don't know",
+                                                     "Several times a month",
+                                                     "Once a month",
+                                                     "Not at all"))) %>% 
+  mutate(neighbourhood_rating = factor(neighbourhood_rating, 
+                                       ordered = TRUE,
+                                       levels = c("Very good",
+                                                  "Fairly good",
+                                                  "Fairly poor",
+                                                  "Very poor"
+                                       ))) %>% 
+  ggplot(aes(x = neighbourhood_rating, y = total_respondents, fill = nearest_green_space_use)) +
+  geom_col(position = "dodge") +
+  scale_fill_brewer(palette = "BrBG") +
+  theme_grey() +
+  labs(title = "Neighbourhood rating by use of greenspace",
+       subtitle = "Scotland 2013-2019",
+       x = "Neighbourhood rating",
+       y = "Total respondents") +
+  guides(fill = guide_legend(title = "Use of greenspace"))
+  
+```
+
+```{r}
+shs_responses %>% 
+  count(nearest_green_space_use)
+```
+
+```{r}
+shs_responses %>% 
+  count(neighbourhood_rating)
 ```
 

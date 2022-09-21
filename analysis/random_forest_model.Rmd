@@ -2,7 +2,7 @@
 title: "Random Forest Model"
 output: html_notebook
 ---
-# load in libraries ----
+# Load in libraries ----
 ```{r}
 library(janitor)
 library(here)
@@ -172,7 +172,7 @@ sens/spec scores are better all-round
 
 
 ```{r}
-# Try a model with more trees
+# Try a third model with more trees
 
 rf_classifier_3 <- ranger(neighbourhood_rating ~.,
                         data = train, 
@@ -197,7 +197,7 @@ confusionMatrix(rf_test_pred_3$pred, rf_test_pred_3$neighbourhood_rating)
 Accuracy 68% 
 Previous model better
 
-# Validate model
+## Validate model 
 The second model is the preferred
 
 ```{r}
@@ -214,7 +214,7 @@ confusionMatrix(rf_validate_pred_2$pred, rf_validate_pred_2$neighbourhood_rating
 ```{r}
 # Plot the importance of variables
 
-plot <- vip::vip(rf_classifier_2, num_features = 11)
+plot <- vip::vip(rf_classifier_2, num_features = 11, aesthetics = list(fill = "deepskyblue4"))
 
 plot
 ```
