@@ -377,7 +377,8 @@ community_belonging_time <- shs_data %>%
        subtitle = "Scotland 2013-2019",
        x = "Year",
        y = "Percentage") +
-  guides(fill = guide_legend(title = "Rating")) 
+  guides(fill = guide_legend(title = "Rating")) +
+  theme_minimal()
 
 ```
 
@@ -431,7 +432,7 @@ neighbourhood_community_rating <- shs_responses %>%
   scale_fill_brewer(palette = "BrBG") +
   theme_minimal() +
   labs(title = "Neighbourhood rating by sense of community belonging",
-       subtitle = "Scotland 2013-2019",
+       subtitle = "Scotland 2012-2019",
        x = "Neighbourhood rating",
        y = "Total respondents") +
   guides(fill = guide_legend(title = "Community belonging")) 
@@ -455,7 +456,7 @@ neighbour_time <- shs_responses %>%
   scale_colour_brewer(palette = "BrBG") +
   theme_minimal() +
   labs(title = "Neighbourhood rating over time",
-       subtitle = "2013-2019",
+       subtitle = "2012-2019",
        x = "Year",
        y = "Total respondents") +
   theme(legend.title = element_blank())
@@ -488,11 +489,12 @@ use_rating <- shs_responses %>%
   scale_fill_brewer(palette = "BrBG") +
   theme_grey() +
   labs(title = "Neighbourhood rating by use of greenspace",
-       subtitle = "Scotland 2013-2019",
+       subtitle = "Scotland 2012-2019",
        x = "Neighbourhood rating",
        y = "Total respondents") +
-  guides(fill = guide_legend(title = "Use of greenspace"))
+  guides(fill = guide_legend(title = "Use of greenspace")) +
   
+
 ```
 
 ```{r}
@@ -503,5 +505,52 @@ shs_responses %>%
 ```{r}
 shs_responses %>% 
   count(neighbourhood_rating)
+```
+
+```{r}
+top_bottom_3 <- shs_data %>% 
+  filter(feature_name %in% c("East Lothian", "Shetland Islands", "Dumfries And Galloway", "Glasgow City", "Dundee City", "West Dunbartonshire"))
+
+top_bottom_plot <- top_bottom_3 %>% 
+  filter(walking_distance_to_nearest_greenspace %in% c("More than 10 minutes", 
+                                                       "Less than 10 minutes")) %>% 
+  filter(measure == "Neighbourhood rating") %>% 
+  filter(gender == "All" &
+           urban_rural_classification == "All" &
+           simd_quintiles == "All" &
+           type_of_tenure  == "All" &
+           household_type  == "All" &
+           ethnicity == "All" &
+           response != "No opinion") %>% 
+  group_by(response, walking_distance_to_nearest_greenspace, feature_name) %>% 
+  mutate(percentage_2013_2019 = mean(percent)) %>% 
+  distinct(percentage_2013_2019) %>% 
+  mutate(response = factor(response, 
+                           ordered = TRUE,
+                           levels = c("Very good",
+                                      "Fairly good", 
+                                      "Fairly poor",
+                                      "Very poor"))) %>%
+  mutate(walking_distance_to_nearest_greenspace = factor(walking_distance_to_nearest_greenspace)) %>% 
+  mutate(feature_name = factor(feature_name,
+                               ordered = TRUE,
+                               levels = c("East Lothian", 
+                                          "Shetland Islands", 
+                                          "Dumfries And Galloway", 
+                                          "Glasgow City", 
+                                          "Dundee City", 
+                                          "West Dunbartonshire"))) %>% 
+  ggplot(aes(x = response, y = percentage_2013_2019)) +
+  geom_col(position = "dodge", fill = "cyan4") +
+  facet_wrap(~ feature_name) +
+  #scale_fill_manual(values = c("darkslategray3", "deepskyblue4")) +
+  theme_minimal() +
+  labs(title = "Neighbourhood rating by area",
+       subtitle = "Scotland 2013-2019",
+       x = "Rating",
+       y = "Percentage") +
+  guides(fill = guide_legend(title = "Walking distance to nearest greenspace")) +
+  coord_flip()
+
 ```
 
