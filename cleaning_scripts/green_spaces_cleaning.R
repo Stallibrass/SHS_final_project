@@ -10,10 +10,11 @@ source(here::here("functions/cleaning_functions.R"))
 green_spaces <- read_csv(here::here("raw_data/green_spaces.csv")) %>% 
   clean_names()
 
-# Clean data with cleaning functions
+# Clean data with cleaning functions and drop feature_code
 green_spaces_clean <- green_spaces %>% 
   clean_data() %>% 
-  add_feature_data()
+  add_feature_data() %>% 
+  select(-c(feature_code, age)) # age isn't shared with any of the other datasets
 
 # Clean data with cleaning functions
 green_spaces_clean <- pivot_data(green_spaces_clean, 

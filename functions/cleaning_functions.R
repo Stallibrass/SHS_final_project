@@ -20,8 +20,7 @@ add_feature_data <- function(data){
     left_join(x = data,
               y = features,
               by = "feature_code") %>% 
-    relocate(feature_name, .after = feature_code) %>% 
-    relocate(feature_type, .after = feature_name)
+    relocate(feature_name, .after = feature_code) 
 }
 
 # Pivots the data so all datasets are in the same format

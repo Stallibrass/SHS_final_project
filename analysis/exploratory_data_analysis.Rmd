@@ -6,7 +6,7 @@ output:
 ---
 # Scottish Household Survey EDA
 
-Read in the data 
+# Read in the data ----
 
 ```{r}
 library(tidyverse)
@@ -37,7 +37,7 @@ shs_responses <- read_csv(here::here("raw_data/shs_aggregate_responses.csv")) %>
   clean_names()
 
 national_performance_framework <- read_xlsx(here::here("raw_data/npf_database.xlsx")) %>% 
-  clean_names()
+  clean_names() # Not used in analysis
 ```
 ### Community Belonging data
 
@@ -243,6 +243,12 @@ shs_responses %>%
 
 shs_responses %>% 
   count(volunteering_last_twelve_months)
+
+shs_responses %>% 
+  count(gender)
+
+shs_responses %>% 
+  count(age)
 ```
 
 ```{r}
@@ -252,6 +258,11 @@ shs_responses %>%
 
 shs_responses %>% 
   count(year)
+
+shs_responses %>% 
+  group_by(year) %>% 
+  summarise(total = n()) %>% 
+  summarise(mean(total))
 ```
 - looks like greenspace questions were not asked in 2017 or 2018 (NMAR)
 

@@ -12,65 +12,175 @@ output:
 ---
 
 
-## Context
+# Context
 
-#### Business intelligence and data-driven decision making
 
-What insights can the business/organisation gain from your analysis and how will your analysis help the business/organisation make better decisions? 
+## Domain knowledge and the business context
 
-#### Domain knowledge and the business context
+The Scottish Household Survey (SHS) is a face-to-face survey conducted throughout the 32 local authorities of Scotland annually. The survey collects data on a sample of the population and covers the living conditions, access to greenspace and attitudes of private households and individuals in Scotland. The SHS directly feeds into the National Performance Framework, the Scottish Government’s indicator for national development and promotion of values.  
 
-Briefly describe the business/organisation and where your analysis fits within its aims/activity. 
+My analysis of neighbourhood ratings and distance to local greenspace serves to better understand how access to greenspace influences people’s perceptions of their local areas.
 
-## Data
+## Business intelligence and data-driven decision making
 
-#### Internal and external data sources
+From my analysis three conclusions can be drawn:
 
-Briefly describe your data sources and which were internal (provided by the organisation) and external (not sourced from the organisation's data)
+1.	Distance to local greenspace and neighbourhood rating vary between areas of Scotland, especially in urban and rural populations.
 
-#### Types of data
+2.	Sense of community belonging is a better predictor of neighbourhood rating than distance to greenspace.
 
-What kind of data did you work with? E.g. categorical and numerical data and their sub-types.
+3.	Survey design, or potential bias in respondents, influences the results of the model.
+
+
+Following on from my analysis I suggest three next steps for the Scottish Government:  
+
+1.	Promote the use of outdoor spaces (the majority of respondents reported that they did not regularly use their nearest greenspace)
+
+2.	Review survey design and ensure that the number of responses remains consistent over each year the survey is conducted.
+
+3.	Other modelling techniques should be considered so that interactions between predictors can be better understood; my suggestion is an ordinal logistic regression design. 
+
+# Data
+
+## Internal and external data sources
+
+The data was sourced from the statistics.gov.scot website.
+
+## Types of data
+
+### `shs_data` dataset
+The data is aggregated from several datasets, covering 2013-2019 (`year`). 
+There are 68726 rows by 12 columns. This data was used solely for analysis. 
+
+_Ordinal_
+
+`response` relates to the response to a particular question (aka `measure`) from the SHS. 
+`walking_distance_to_nearest_greenspace` refers to the distance respondents must walk to greenspace. NAs are present where data in the `measure` column relates to distance to greenspace.  
+`SIMD_quintiles` includes the top and lower 20% of the deprivation scale. 
+
+_Nominal_
+
+`feature_name corresponds to the location of the respondent. 
+The `measure` column represents what question is being measured. 
+`urban_rural_classification` classifiers the area of a respondent as either being rural or urban. 
+`gender` can either be "Male" or "Female". 
+`household_type` refers to who lives in the property, "Adults", "Pensioners" or "With children". 
+`type_of_tenure` captures whether the property is "Owned", "Owned mortgage/loan", "Private rented", "Social rented" or "Other". 
+`ethnicity` records the ethnicity of respondents as either "White" or "Other".
+Data is aggregated across all columns to include "All" levels.
+
+_Numerical_
+
+The `percent` column is an estimate of the percentage of respondents that answered the survey. 
+`year` refers to the year the survey data was collected
+
+### `shs_responses` dataset
+
+The data consisted of 50346 rows by 12 variables; 10 of which were categorical and 2 numerical. Each row corresponds to a person’s answers to the survey. This data was used for predictive model building and analysis. 
+
+_Ordinal_
+
+`community_belonging` answers to “HOW STRONGLY DO YOU FEEL YOU BELONG TO YOUR IMMEDIATE NEIGHBOURHOOD?”
+
+`neighbourhoud_rating` answers to “THINKING NOW ABOUT THE NEIGHBOURHOOD YOU LIVE IN, HOW WOULD YOU RATE IT AS A PLACE TO LIVE?”
+
+`distance_to_nearest_green_space` answers to “HOW FAR AWAY FROM YOUR HOME IS THE
+NEAREST PUBLIC GREEN SPACE HOW LONG WOULD IT TAKE ME TO WALK THERE?”
+
+`satisfaction_with_nearest_green_space` answers to “AND HOW SATISFIED OR DISSATISFIED WOULD YOU SAY YOU ARE WITH THE QUALITY OF THE SPACE?”
+
+`age` age of respondent, either “16-34 Years”, “35-64 Years” or “65+ Years”
+
+`nearest_green_space_use` answers to “HOW OFTEN, IF AT ALL, DO YOU USE THIS SPACE, EVEN IF JUST TO PASS THROUGH IT?”
+
+_Nominal_
+
+`gender` the gender of the respondent. 
+`economic_status` employment status of the respondent.
+`highest_education_level` the highest education reported by the respondent.
+`volunteering_in_the_last_12_months whether the respondent had volunteered in the last year.
+
+_Numerical_
+
+`year` what year the survey was taken. 
+`household_size` the number of people in the household. 
 
 #### Data formats
 
-What format did your data come in? E.g. all downloaded flat files (CSV) or any data from APIs, scraping etc.
+The data was in the form of CSV files.
 
 #### Data quality and bias
 
-Briefly describe the quality of the data and whether you have any reasons to suggest the data is biased e.g. only data from a specific demographic even though a broader demographic would be of interest to the organisation.
+The `shs_responses` dataset contained many missing values across `satisfaction_with_nearest_green_space`, `highest_education_level`, `nearest_green_space_use` and `volunteering_last_twelve_months`. It appears that questions on greenspace use, and satisfaction were not recorded for this dataset in 2017 and 2018. There were significantly less responses recorded in 2017 and 2018 compared to other years. 
+
+Due to the nature of data collection (in-person survey) the data is liable to be biased in the following ways:
+
+_Response bias_ : the survey questions are structured as multiple choice so the respondent has a limited range of answers.
+
+_Question order bias_ : questions are asked in a particular sequence; respondents may wish to be viewed as consistent in their answers even if the answers given do not align with their actual beliefs. 
+
+_Self-selection bias_ : the respondents have a choice whether or not to be interviewed. 
+
+The data may also be affected by sampling bias but that is difficult to confirm as there are not population level statistics included in the data. 
+
 
 ## Ethics
 
 #### Ethical issues in data sourcing and extraction
 
-Do you have any ethical concerns regarding the sourcing and extraction of your data? 
+Scottish Household Survey data is covered by the Open Government Licence (https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/). 
+Personal information is not discernible from the data. 
 
 #### Ethical implications of business requirements
 
-Are there any ethical implications of the business requirements?
+Data from the Scottish Household Survey directly contributes to metrics that inform government policy; any decisions made using the data should be made with consideration to how policy affects respondents and the communities they live in.  
 
 ## Analysis
 
-1. explore the data
+The main stages in my data analysis process:
 
-What were the main stages in your data analysis process?
+1.	Frame the problem
+i)	Define the objective in business terms
+2.	Source and explore the data
+ii)	Read in data
+iii)	Study each variable and its characteristics
+iv)	Visualise the data
+3.	Prepare the data
+i)	Clean the data
+ii)	Feature engineering and selection
+4.	Create a short list of models
+i)	Train various types of models
+ii)	Measure and compare performance
+iii)	Analyses most significant variables
+iv)	Compare types of errors models make
+v)	Short list top 3 models
+5.	Fine-tune models
+i)	Select most promising model
+ii)	Fine-tune model hyperparameters
+iii)	Check model on test and validation sets
+iv)	Check for overfitting
+6.	Write report and present findings
+i)	Explain why solution achieves the business objective
 
 #### Tools for data analysis
 
-What were the main tools you used for your analysis?
+R
+
+RStudio
+
+PowerPoint
 
 #### Descriptive, diagnostic, predictive and prescriptive analysis
 
-Please report under which of the below categories your analysis falls **and why** (can be more than one) 
 
-::: {.emphasis}
-**Descriptive Analytics** tells you what happened in the past.
+**Descriptive Analytics** 
 
-**Diagnostic Analytics** helps you understand why something happened in the past.
+Analysis was conducted to visualise how responses had changed over time. Summary statistics were given.
 
-**Predictive Analytics** predicts what is most likely to happen in the future.
+**Predictive Analytics** 
 
-**Prescriptive Analytics** recommends actions you can take to affect those outcomes.
-:::
+A predictive model (random forest) was used to show the most important variables when predicting a person’s rating of their neighbourhood. 
 
+**Prescriptive Analytics**
+
+From my analysis and model suggestions for further actions were made. 

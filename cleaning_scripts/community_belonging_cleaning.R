@@ -10,10 +10,11 @@ source(here::here("functions/cleaning_functions.R"))
 community_belonging <- read_csv(here::here("raw_data/community_belonging.csv")) %>% 
   clean_names()
 
-# Clean data with cleaning functions
+# Clean data with cleaning functions and drop feature_code
 community_belonging_clean <- community_belonging %>% 
   clean_data() %>% 
-  add_feature_data()
+  add_feature_data() %>% 
+  select(-feature_code)
 
 # Pivot ready for joining
 community_belonging_clean <- pivot_data(community_belonging_clean, "community_belonging")

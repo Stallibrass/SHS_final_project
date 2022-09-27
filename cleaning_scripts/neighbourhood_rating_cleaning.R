@@ -10,10 +10,11 @@ source(here::here("functions/cleaning_functions.R"))
 neighbourhood_rating <- read_csv(here::here("raw_data/neighbourhood_rating.csv")) %>% 
   clean_names()
 
-# Clean data with cleaning functions
+# Clean data with cleaning functions and drop feature_code
 neighbourhood_rating_clean <- neighbourhood_rating %>% 
   clean_data() %>% 
-  add_feature_data()
+  add_feature_data() %>% 
+  select(-feature_code)
 
 # Pivot ready for joining
 neighbourhood_rating_clean <- pivot_data(neighbourhood_rating_clean, 

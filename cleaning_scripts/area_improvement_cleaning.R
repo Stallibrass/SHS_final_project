@@ -17,5 +17,10 @@ area_improvement_clean <- area_improvement %>%
 # Pivot data to long format, ready for joining
 area_improvement_clean <- pivot_data(area_improvement_clean, 
                                      "local_neighbourhood_improvement")
+
+# Remove feature_code and feature_type
+area_improvement_clean  <- area_improvement_clean %>% 
+  select(-c(feature_code, feature_type))
+
 # Write clean data to csv
 write_csv(area_improvement_clean, "clean_data/area_improvement_clean.csv")

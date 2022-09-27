@@ -9,9 +9,10 @@ area_improvement <- read_csv(here::here("raw_data/area_improvement.csv")) %>%
 
 glimpse(area_improvement)
 
-# Create new table with just the feature data (feature_name, feature_code and feature_type)
+# Create new table with just the feature_name column
 features <- area_improvement %>% 
-  select(starts_with("feature")) %>% 
+  select(starts_with("feature_")) %>% 
+  select(-feature_type) %>% 
   unique()
 
 glimpse(features)

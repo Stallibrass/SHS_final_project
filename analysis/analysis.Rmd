@@ -13,7 +13,6 @@ shs_data <- read_csv(here::here("clean_data/shs_data.csv"))
 
 # Additional data cleaning
 shs_data <- shs_data %>% 
-  select(-age) %>% # over 55000 NAs 
   mutate(across(where(is_character), str_to_sentence)) %>% 
   mutate(feature_name = str_to_title(feature_name)) %>% 
   mutate(measure = str_replace_all(measure, "_", " ")) %>% 
@@ -24,7 +23,7 @@ glimpse(shs_data)
 ```
 
 # Explore the data ----
-
+(would be nice to do some hypothesis testing)
 ```{r}
 skimr::skim(shs_data)
 ```
@@ -402,7 +401,8 @@ shs_responses <- read_csv(here::here("clean_data/shs_responses_clean.csv"))
 
 ```{r}
 skimr::skim(shs_responses)
-
+shs_responses %>% 
+  count(year)
 ```
 
 ```{r}
